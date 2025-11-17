@@ -6,7 +6,7 @@
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "data-service",
 	"main": "src/index.ts",
-	"compatibility_date": "2025-06-17",
+	"compatibility_date": "2025-09-17",
 	"compatibility_flags": ["nodejs_compat"],
 	"observability": {
 		"enabled": true
@@ -37,5 +37,15 @@
 				"queue": "smart-links-data-queue-stage"
 			}
 		]
+	},
+	"workflows": [
+		{
+			"binding": "DESTINATION_EVALUATION_WORKFLOW",
+			"name": "destination-evaluation-workflow",
+			"class_name": "DestinationEvaluationWorkflow"
+		}
+	],
+	"browser": {
+		"binding": "VIRTUAL_BROWSER"
 	}
 }
