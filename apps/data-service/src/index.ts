@@ -1,30 +1,25 @@
-import { WorkerEntrypoint } from 'cloudflare:workers';
-import { App } from './hono/app';
-import { initDatabase } from '@repo/data-ops/database';
-import { handleLinkClick } from './queue-handlers/link-clicks';
-import { QueueMessageSchema } from '@repo/data-ops/zod-schema/queue';
-export { DestinationEvaluationWorkflow } from '@/workflows/destination-evaluation-workflow';
+import { WorkflowEntrypoint, WorkflowEvent, WorkflowStep } from 'cloudflare:workers';
+import { collectDestinationInfo } from '@/helpers/browser-render';
+import { aiDestinationChecker } from '@/helpers/ai-destination-checker';
+export class DestinationEvaluationWorkflow extends WorkflowEntrypoint<Env, DestinationStatusEvaluationParams> {
+	async run(event: Readonly<WorkflowEvent<DestinationStatusEvaluationParams>>, step: WorkflowStep) {
+		const collectedData = await step.do('Collect rendered destination page data', async () => {
+			return collectDestinationInfo(this.env, event.payload.destinationUrl);
+		});
 
-export default class DataService extends WorkerEntrypoint<Env> {
-	constructor(ctx: ExecutionContext, env: Env) {
-		super(ctx, env);
-		initDatabase(env.DB);
-	}
-	fetch(request: Request) {
-		return App.fetch(request, this.env, this.ctx);
-	}
-
-	async queue(batch: MessageBatch<unknown>) {
-		for (const message of batch.messages) {
-			const parsedEvent = QueueMessageSchema.safeParse(message.body);
-			if (parsedEvent.success) {
-				const event = parsedEvent.data;
-				if (event.type === 'LINK_CLICK') {
-					await handleLinkClick(this.env, event);
-				}
-			} else {
-				console.error(parsedEvent.error);
+		const aiStatus = await step.do(
+			'Use AI to check status of page',
+			{
+				retries: {
+					limit: 0,
+					delay: 0,
+				},
+			},
+			async () => {
+				return await aiDestinationChecker(this.env, collectedData.bodyText);
 			}
-		}
+		);
+
+		console.log(collectedData);
 	}
 }
